@@ -1,0 +1,68 @@
+# config.yml
+#
+# Blog: "Configuring NeMo: The Two Files You Need", component 1.
+# The rails block below is that snippet. The models and dialog blocks are
+# what this folder needs to run it locally: a local LLM for the self-check
+# prompts, and embedding match against the examples in rails.co.
+# instructions and sample_conversation steer the two replies the model
+# actually writes (declined card, how to open a fixed deposit). Fixed
+# refusals in rails.co do not use them.
+#
+# NeMo rail types: https://docs.nvidia.com/nemo/guardrails/configure-rails/overview.html
+
+models:
+  - type: main
+    engine: ollama
+    model: qwen2.5:3b
+    parameters:
+      base_url: http://localhost:11434/v1
+      api_key: ollama
+
+instructions:
+  - type: general
+    content: |
+      You are a banking assistant for this bank.
+      If the user asks how to open or buy a fixed deposit, answer with a short numbered list of steps for this bank only.
+      If the user reports a declined card, give 2-3 possible reasons (merchant timeout, insufficient funds, or technical issues).
+      When you see a masked card number (like **** **** **** 1234), treat it as valid - the user has provided their card details.
+      Never ask users to repeat card numbers. Never name another bank. Never say which product grows money faster.
+
+sample_conversation: |
+  user "How do I open a fixed deposit?"
+    ask product info
+  bot respond with product steps
+    "1. Sign in. 2. Choose a tenure and an amount. 3. Confirm in the app."
+  user "My card ending in 1234 was declined at a shop. Why?"
+    ask about card decline reason
+  bot explain a declined card
+    "A card decline can happen for several reasons: the merchant's payment processor may have timed out, your card limit may have been reached, or there could be a temporary network issue. You can try the transaction again or contact support."
+
+rails:
+  input:
+    flows:
+      - self check input
+      - mask sensitive data on input
+  output:
+    flows:
+      - self check output
+      - mask sensitive data on output
+  dialog:
+    user_messages:
+      # Nearest example in rails.co wins when the score is at least this.
+      # Tuned on the sentences in the blog: the declined-card question stays
+      # below it (no intent), and the advice question stays above it.
+      embeddings_only: true
+      embeddings_only_similarity_threshold: 0.50
+  config:
+    sensitive_data_detection:
+      recognizers:
+        - name: "Bank account recognizer"
+          supported_entity: "BANK_ACCOUNT"
+          patterns:
+            - name: "14-digit account"
+              regex: "\\b\\d{14}\\b"
+              score: 0.6
+      input:
+        entities: [CREDIT_CARD, BANK_ACCOUNT]
+      output:
+        entities: [CREDIT_CARD, BANK_ACCOUNT]

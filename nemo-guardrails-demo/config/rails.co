@@ -1,0 +1,61 @@
+# rails.co — intent examples and dialog flows
+#
+# Blog: "Configuring NeMo: The Two Files You Need", component 2.
+# Same intents and flows as that section. The self-check flow at the bottom
+# is the one extra: the dry run still enters the dialog manager after
+# self check input flags a message, and block advice returns the fixed line.
+
+define user ask financial advice
+  "Which is better, FD or mutual fund?"
+  "Should I invest this money somewhere else?"
+  "Where will my savings grow faster?"
+
+define user ask competitor comparison
+  "Is HDFC better than you?"
+  "The big private bank offers more, right?"
+
+define user ask product info
+  "How do I open a fixed deposit?"
+  "What's the process to buy an FD with you?"
+
+define user ask transactions
+  "Show my last transactions"
+  "What did I spend this week?"
+
+define bot refuse advice
+  "I can't provide financial advice or compare with other banks, but I can explain our products."
+
+define bot ask to authenticate
+  "Please verify with an OTP first."
+
+define bot show transactions
+  "Here are your last transactions:\n$txns"
+
+# The post writes this as one flow:
+#   user ask financial advice or user ask competitor comparison
+#   bot refuse advice
+# In NeMo Guardrails 0.24 that `or` is stored as an `any` step, and a flow
+# only starts when its first step is the user intent. The two flows below
+# are that same rule: either intent returns the same fixed refusal.
+define flow block advice
+  user ask financial advice
+  bot refuse advice
+
+define flow block competitor comparison
+  user ask competitor comparison
+  bot refuse advice
+
+define flow show transactions
+  user ask transactions
+  if not $authenticated
+    bot ask to authenticate
+    stop
+  else
+    $txns = execute get_transactions_masked
+    bot show transactions
+
+# Built-in self check input stops the turn on "Yes". Scenario 3 of the dry
+# run flags the message and then runs block advice, so this copy records the
+# flag and continues. config.yml still lists the flow under input rails.
+define flow self check input
+  $response = execute self_check_input
