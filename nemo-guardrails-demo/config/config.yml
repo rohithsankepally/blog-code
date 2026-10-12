@@ -53,6 +53,11 @@ rails:
       # below it (no intent), and the advice question stays above it.
       embeddings_only: true
       embeddings_only_similarity_threshold: 0.50
+  # Retrieval rails configuration for knowledge base filtering
+  config:
+    knowledge_base:
+      max_document_age_days: 90  # Reject documents older than 90 days
+      allowed_document_types: ["public", "customer-facing"]
   config:
     sensitive_data_detection:
       recognizers:

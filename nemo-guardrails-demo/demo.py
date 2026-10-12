@@ -1,12 +1,13 @@
-"""NeMo Guardrails Demo - Banking Agent with Four Core Scenarios
+"""NeMo Guardrails Demo - Banking Agent with Five Core Scenarios
 
-This demo illustrates NeMo's orchestration capabilities through four scenarios
-that demonstrate comprehensive guardrail coverage:
+This demo illustrates NeMo's orchestration capabilities through five scenarios
+that demonstrate comprehensive guardrail coverage across all rail types:
 
 1. PII Leakage Prevention - Input masking with Presidio
 2. Financial Advice Blocking - Dialog flow with semantic intent matching
 3. Authentication Enforcement - Stateful checks before tool execution
 4. Allowed Product Queries - Demonstrating legitimate requests work normally
+5. Knowledge Base Filtering - Retrieval rails for document freshness and permissions
 
 Prerequisites:
     - Ollama running with qwen2.5:3b model
@@ -39,7 +40,7 @@ OPTIONS = GenerationOptions(
     log=GenerationLogOptions(activated_rails=True, llm_calls=True, colang_history=True)
 )
 
-# Four core scenarios demonstrating NeMo's orchestration capabilities
+# Five core scenarios demonstrating NeMo's orchestration capabilities
 SCENARIOS = [
     {
         "title": "Scenario 1: Preventing PII Leakage",
@@ -64,6 +65,12 @@ SCENARIOS = [
         "user": "What's the process to buy a fixed deposit with you?",
         "authenticated": False,
         "note": "Intent matches 'user ask product info'. Since no dialog flow is defined for this low-risk informational query, it passes through to the LLM. Output rails verify the response contains factual information, not financial advice.",
+    },
+    {
+        "title": "Scenario 5: Filtering Retrieved Knowledge",
+        "user": "What are your current fixed deposit interest rates?",
+        "authenticated": False,
+        "note": "Knowledge base contains 3 documents: current rates (Oct 2026), outdated rates (June 2023), and internal competitor analysis. Retrieval rails filter by freshness (90-day cutoff) and document type (public only). Only the current rates document passes. Without retrieval rails, agent might cite outdated 6.5% instead of current 7.2% or leak competitor analysis.",
     },
 ]
 
@@ -115,7 +122,7 @@ def _masked(outcome, original):
 
 
 # Dialog flows defined in rails.co that we track in output
-FLOW_RAILS = {"block advice", "block competitor comparison", "show transactions"}
+FLOW_RAILS = {"block advice", "block competitor comparison", "show transactions", "provide fd rates"}
 
 
 async def describe(rails, result, user):
@@ -141,10 +148,14 @@ async def describe(rails, result, user):
     flows = []
 
     # Parse activated rails to extract judges and flows
+    retrieval_actions = []
     for rail in result.log.activated_rails:
         for action in rail.executed_actions:
             if action.action_name == "get_transactions_masked":
                 tool_called = True
+            # Track retrieval actions for Scenario 5
+            if action.action_name in ("retrieve_documents", "filter_by_freshness", "format_fd_rates"):
+                retrieval_actions.append(action.action_name)
             for call in action.llm_calls:
                 if call.task in ("self_check_input", "self_check_output"):
                     judges[call.task] = _judge(call)
@@ -170,6 +181,10 @@ async def describe(rails, result, user):
     else:
         lines.append("   dialog  no flow for this intent; the model writes the reply")
 
+    # RETRIEVAL RAILS (if any retrieval actions were executed)
+    if retrieval_actions:
+        lines.append(f"   retrieval: {', '.join(retrieval_actions)}")
+    
     # TOOL EXECUTION
     lines.append(f"   tool called: {tool_called}")
 
@@ -202,11 +217,11 @@ async def run(rails, user, authenticated=False):
 
 
 async def main():
-    """Run all four core scenarios demonstrating NeMo's guardrail capabilities."""
+    """Run all five core scenarios demonstrating NeMo's guardrail capabilities."""
     rails = LLMRails(RailsConfig.from_path(str(CONFIG_DIR)))
 
     print("=" * 80)
-    print("NeMo Guardrails Demo - Banking Agent")
+    print("NeMo Guardrails Demo - Banking Agent with Retrieval Rails")
     print("=" * 80)
     print()
     

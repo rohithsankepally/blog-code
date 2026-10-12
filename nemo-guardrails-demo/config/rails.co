@@ -59,3 +59,29 @@ define flow show transactions
 # flag and continues. config.yml still lists the flow under input rails.
 define flow self check input
   $response = execute self_check_input
+
+# Knowledge base query intent
+define user ask fd rates
+  "What are your current FD rates?"
+  "What interest do you offer on fixed deposits?"
+  "Tell me about FD interest rates"
+  "Show me fixed deposit rates"
+
+# Bot responses
+define bot provide fd rates
+  "Our current fixed deposit rates are:\n$rates"
+
+define bot refuse outdated info
+  "I don't have current rate information available. Please contact our support team for the latest rates."
+
+# Flow with retrieval rails - filters documents before LLM sees them
+define flow provide fd rates
+  user ask fd rates
+  $docs = execute retrieve_documents(query="fixed deposit rates")
+  $filtered = execute filter_by_freshness(docs=$docs, max_age_days=90)
+  
+  if len($filtered) > 0
+    $rates = execute format_fd_rates(docs=$filtered)
+    bot provide fd rates
+  else
+    bot refuse outdated info

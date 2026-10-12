@@ -5,12 +5,13 @@ in isolation. Each guardrail (system prompt, keyword filter, tool guard,
 moderation API, output validator) operates independently without knowledge
 of the full conversation context.
 
-The four scenarios below illustrate gaps that NeMo's orchestration layer solves:
+The five scenarios below illustrate gaps that NeMo's orchestration layer solves:
 
 1. PII Leakage - Sensitive data reaches the LLM before validation
 2. Financial Advice - Semantic policy violations missed by keyword matching
 3. Unauthenticated Access - Tool guards react after the tool is invoked
 4. Over-blocking Risk - Keyword lists can block legitimate queries
+5. Outdated Knowledge - No validation of retrieved documents at retrieval stage
 
 This script requires no external dependencies and demonstrates the conceptual
 limitations of point solutions.
@@ -147,7 +148,7 @@ def tool_guard(tool_call, authenticated):
     return "pass", "checks passed"
 
 
-# Four scenarios demonstrating individual guardrail limitations
+# Five scenarios demonstrating individual guardrail limitations
 JOURNEYS = [
     {
         "title": "1. PII Leakage (Card Number)",
@@ -180,6 +181,14 @@ JOURNEYS = [
         "tool": None,
         "prompt_note": "passes through correctly",
         "gap": "If 'deposit' was added to the keyword blocklist to catch 'deposit money elsewhere', this legitimate product query would be blocked. Keyword filters lack context.",
+    },
+    {
+        "title": "5. Outdated Retrieved Knowledge",
+        "user": "What are your current fixed deposit interest rates?",
+        "reply": "Our fixed deposit rates are 6.5% for 1-year, 6.8% for 2-year, and 7.0% for 5-year tenures.",  # Outdated from 2023
+        "tool": None,
+        "prompt_note": "system prompt cannot validate document timestamps or permissions",
+        "gap": "Retrieved outdated document from 2023 (6.5% rate) instead of current 2026 rates (7.2%). No guardrail inspects the retrieval stage. Individual guardrails can't validate document freshness, permissions, or filter internal competitor analysis before it reaches the LLM.",
     },
 ]
 
